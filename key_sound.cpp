@@ -31,6 +31,8 @@ static bool  g_muted_switch_to_ru = false;
 static bool  g_muted_switch_to_en = false;
 static bool  g_autorun = false;
 
+HINSTANCE h_Inst;
+
 enum : UINT{
 	ID_TRAY_MUTE_ALL = 1000,   // новый
 	ID_TRAY_OPTIONS = 1001,    // идентификатор пункта-Ђзаголовкаї, дл€ клика не об€зателен
@@ -56,6 +58,26 @@ static HMENU g_hOptions = nullptr;
 
 // ’ук
 static HHOOK g_hHook = nullptr;
+
+
+static HICON g_hIconRu = nullptr;
+static HICON g_hIconEn = nullptr;
+// -----------------------------------------------------------------------------------------------------------
+
+static void LoadTrayIcons(HINSTANCE hInst){
+	// 16x16 дл€ тре€ будет выбран системой из многоразмерного ICO
+	g_hIconRu = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(IDI_ICON_RU),
+								  IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
+	g_hIconEn = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(IDI_ICON_EN),
+								  IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
+} // -----------------------------------------------------------------------------------------------------------
+
+static void TraySetIcon(HICON hIcon){
+	if(!hIcon) return;
+	g_nid.uFlags = NIF_ICON;
+	g_nid.hIcon = hIcon;
+	Shell_NotifyIconW(NIM_MODIFY, &g_nid);
+} // -----------------------------------------------------------------------------------------------------------
 
 static void LoadSettings(){
 	HKEY hKey;
@@ -328,9 +350,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
 		g_nid.uID = 1;
 		g_nid.uFlags = NIF_MESSAGE | NIF_ICON | NIF_TIP;
 		g_nid.uCallbackMessage = WM_TRAY;
-		g_nid.hIcon = LoadIconW(GetModuleHandleW(nullptr), MAKEINTRESOURCEW(IDI_APPICON)); // из ресурсов
 		lstrcpynW(g_nid.szTip, L"RU Key Sound", ARRAYSIZE(g_nid.szTip));
-		Shell_NotifyIconW(NIM_ADD, &g_nid); // [web:52][web:58]
+		
+		LoadTrayIcons(h_Inst);
+		g_nid.hIcon = g_hIconEn; // или вычислите текущую раскладку и выберите иконку
+		Shell_NotifyIconW(NIM_ADD, &g_nid);
 		break;
 	}
 	case WM_TRAY: {
@@ -414,12 +438,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
 		}
 		break;
 	}
+
 	case WM_DESTROY: {
 		Shell_NotifyIconW(NIM_DELETE, &g_nid);
 		if(g_hMenu){ DestroyMenu(g_hMenu); g_hMenu = nullptr; }
 		PostQuitMessage(0);
 		break;
 	}
+
+	case WM_INPUTLANGCHANGE: {
+		// wParam Ч флаги, lParam Ч HKL
+		LANGID lang = LOWORD((UINT_PTR)lParam);
+		TraySetIcon(lang == 0x0419 ? g_hIconRu : g_hIconEn);
+	}
+
 	default:
 		return DefWindowProcW(hWnd, msg, wParam, lParam);
 	}
@@ -427,6 +459,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
 } // -----------------------------------------------------------------------------------------------------------
 
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int){
+	h_Inst = hInst;
 	// ќкно-приЄмник дл€ тре€ и меню
 	const wchar_t* kClass = L"RuKeySoundWnd";
 	WNDCLASSW wc{};
