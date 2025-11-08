@@ -11,20 +11,24 @@
 #pragma comment(lib, "winmm.lib")
 
 // Настройки
-static const wchar_t* REG_APP_RUN =
-L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
-static const wchar_t* REG_APP_KEY =
-L"Software\\RuKeySound";
+static const wchar_t* REG_APP_RUN = L"Software\\Microsoft\\Windows\\CurrentVersion\\Run";
+static const wchar_t* REG_APP_KEY = L"Software\\RuKeySound";
 static const wchar_t* REG_VAL_WAV = L"WavPath";
 static const wchar_t* REG_VAL_AUTORUN = L"AutoRun";
+static const wchar_t* REG_VAL_WAV_TO_RU = L"WavToRuPath";
+static const wchar_t* REG_VAL_WAV_TO_EN = L"WavToEnPath";
 
 static WCHAR g_wavPath[MAX_PATH] = L"C:\\Windows\\Media\\Windows Navigation Start.wav";
+static WCHAR g_wavPathToRu[MAX_PATH] = L"C:\\Windows\\Media\\Windows Unlock.wav";
+static WCHAR g_wavPathToEn[MAX_PATH] = L"C:\\Windows\\Media\\Windows Battery Low.wav";
 static bool  g_muted = false;
 static bool  g_autorun = false;
 
 enum : UINT{
 	ID_TRAY_MUTE = 1001,
 	ID_TRAY_SELECT = 1003,
+	ID_TRAY_SELECT_TO_RU = 1005,
+	ID_TRAY_SELECT_TO_EN = 1006,
 	ID_TRAY_AUTORUN = 1004,
 	ID_TRAY_EXIT = 1002
 };
@@ -42,6 +46,13 @@ static void LoadSettings(){
 	if(RegCreateKeyExW(HKEY_CURRENT_USER, REG_APP_KEY, 0, nullptr, 0, KEY_READ, nullptr, &hKey, nullptr) == ERROR_SUCCESS){
 		DWORD type = 0, cb = sizeof(g_wavPath);
 		if(RegQueryValueExW(hKey, REG_VAL_WAV, nullptr, &type, reinterpret_cast<LPBYTE>(g_wavPath), &cb) == ERROR_SUCCESS && type == REG_SZ){}
+
+		cb = sizeof(g_wavPathToRu);
+		if(RegQueryValueExW(hKey, REG_VAL_WAV_TO_RU, nullptr, &type, reinterpret_cast<LPBYTE>(g_wavPathToRu), &cb) == ERROR_SUCCESS && type == REG_SZ){}
+
+		cb = sizeof(g_wavPathToEn);
+		if(RegQueryValueExW(hKey, REG_VAL_WAV_TO_EN, nullptr, &type, reinterpret_cast<LPBYTE>(g_wavPathToEn), &cb) == ERROR_SUCCESS && type == REG_SZ){}
+
 		DWORD autorun = 0; cb = sizeof(autorun);
 		if(RegQueryValueExW(hKey, REG_VAL_AUTORUN, nullptr, &type, reinterpret_cast<LPBYTE>(&autorun), &cb) == ERROR_SUCCESS && type == REG_DWORD){
 			g_autorun = autorun != 0;
@@ -54,8 +65,14 @@ static void SaveSettings(){
 	HKEY hKey;
 	if(RegCreateKeyExW(HKEY_CURRENT_USER, REG_APP_KEY, 0, nullptr, 0, KEY_WRITE, nullptr, &hKey, nullptr) == ERROR_SUCCESS){
 		RegSetValueExW(hKey, REG_VAL_WAV, 0, REG_SZ, reinterpret_cast<const BYTE*>(g_wavPath), (DWORD)((wcslen(g_wavPath) + 1) * sizeof(wchar_t)));
+
+		RegSetValueExW(hKey, REG_VAL_WAV_TO_RU, 0, REG_SZ, reinterpret_cast<const BYTE*>(g_wavPathToRu), (DWORD)((wcslen(g_wavPath) + 1) * sizeof(wchar_t)));
+
+		RegSetValueExW(hKey, REG_VAL_WAV_TO_EN, 0, REG_SZ, reinterpret_cast<const BYTE*>(g_wavPathToEn), (DWORD)((wcslen(g_wavPath) + 1) * sizeof(wchar_t)));
+
 		DWORD autorun = g_autorun ? 1u : 0u;
 		RegSetValueExW(hKey, REG_VAL_AUTORUN, 0, REG_DWORD, reinterpret_cast<const BYTE*>(&autorun), sizeof(autorun));
+
 		RegCloseKey(hKey);
 	}
 } // -----------------------------------------------------------------------------------------------------------
@@ -111,6 +128,8 @@ static void BuildOrUpdateTrayMenu(){
 
 	AppendMenuW(g_hMenu, MF_STRING | (g_muted ? MF_CHECKED : 0), ID_TRAY_MUTE, L"Mute");
 	AppendMenuW(g_hMenu, MF_STRING, ID_TRAY_SELECT, L"Select file...");
+	AppendMenuW(g_hMenu, MF_STRING, ID_TRAY_SELECT_TO_RU, L"Select file for ru...");
+	AppendMenuW(g_hMenu, MF_STRING, ID_TRAY_SELECT_TO_EN, L"Select file for en...");
 	AppendMenuW(g_hMenu, MF_STRING | (g_autorun ? MF_CHECKED : 0), ID_TRAY_AUTORUN, L"Autostart");
 	AppendMenuW(g_hMenu, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW(g_hMenu, MF_STRING, ID_TRAY_EXIT, L"Exit");
@@ -137,7 +156,7 @@ static bool IsRuLayout(){
 	HKL hkl = GetForegroundHKL();
 	LANGID lang = LOWORD((UINT_PTR)hkl);
 	return lang == 0x0419; // RU
-}
+} // -----------------------------------------------------------------------------------------------------------
 
 // Проверка: клавиша даёт «печатаемый» символ с учётом текущей раскладки и модификаторов
 static bool IsPrintableKey(DWORD vkCode, DWORD scanCode, bool isKeyDown){
@@ -178,23 +197,44 @@ static bool IsPrintableKey(DWORD vkCode, DWORD scanCode, bool isKeyDown){
 	);
 	// res > 0 => выданы символы (печать на экран); res == -1 => dead key, не печатается сейчас
 	return res > 0;
-}
+} // -----------------------------------------------------------------------------------------------------------
 
 static void PlayKeySound(){
 	if(g_muted) return;
 	PlaySoundW(g_wavPath, nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
-}
+} // -----------------------------------------------------------------------------------------------------------
+
+static void PlayKeySoundToRu(){
+	if(g_muted) return;
+	PlaySoundW(g_wavPathToRu, nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+} // -----------------------------------------------------------------------------------------------------------
+
+static void PlayKeySoundToEn(){
+	if(g_muted) return;
+	PlaySoundW(g_wavPathToEn, nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
+} // -----------------------------------------------------------------------------------------------------------
 
 LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam){
+	static bool isRusPrev = false;
 	if(nCode == HC_ACTION){
 		const KBDLLHOOKSTRUCT* p = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
 		bool isDown = (wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN);
-		if(IsRuLayout() && IsPrintableKey(p->vkCode, p->scanCode, isDown)){
+		bool isRus = IsRuLayout();
+		if(isRus && IsPrintableKey(p->vkCode, p->scanCode, isDown)){
 			PlayKeySound();
+		} else{
+			bool isUp = (wParam == WM_KEYUP || wParam == WM_SYSKEYUP);
+			if(isRus && !isRusPrev){
+				isRusPrev = isRus;
+				PlayKeySoundToRu();
+			} else if(!isRus && isRusPrev){
+				isRusPrev = isRus;
+				PlayKeySoundToEn();
+			}
 		}
 	}
 	return CallNextHookEx(g_hHook, nCode, wParam, lParam);
-}
+} // -----------------------------------------------------------------------------------------------------------
 
 // Окно-приёмник сообщений
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
@@ -224,11 +264,13 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
 		}
 		break;
 	}
+
 	case WM_COMMAND: {
 		switch(LOWORD(wParam)){
 		case ID_TRAY_MUTE:
 			g_muted = !g_muted; SaveSettings();
 			break;
+
 		case ID_TRAY_SELECT: {
 			std::wstring sel;
 			if(SelectWavFile(hWnd, sel)){
@@ -237,11 +279,31 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
 			}
 			break;
 		}
+
+		case ID_TRAY_SELECT_TO_RU: {
+			std::wstring sel;
+			if(SelectWavFile(hWnd, sel)){
+				wcsncpy_s(g_wavPathToRu, sel.c_str(), _TRUNCATE);
+				SaveSettings();
+			}
+			break;
+		}
+
+		case ID_TRAY_SELECT_TO_EN: {
+			std::wstring sel;
+			if(SelectWavFile(hWnd, sel)){
+				wcsncpy_s(g_wavPathToEn, sel.c_str(), _TRUNCATE);
+				SaveSettings();
+			}
+			break;
+		}
+
 		case ID_TRAY_AUTORUN:
 			g_autorun = !g_autorun;
 			UpdateAutoRun(g_autorun);
 			SaveSettings();
 			break;
+
 		case ID_TRAY_EXIT:
 			PostQuitMessage(0);
 			break;
@@ -258,7 +320,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
 		return DefWindowProcW(hWnd, msg, wParam, lParam);
 	}
 	return 0;
-}
+} // -----------------------------------------------------------------------------------------------------------
 
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int){
 	// Окно-приёмник для трея и меню
@@ -286,4 +348,4 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int){
 
 	UnhookWindowsHookEx(g_hHook);
 	return 0;
-}
+} // -----------------------------------------------------------------------------------------------------------
