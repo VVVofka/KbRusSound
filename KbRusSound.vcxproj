@@ -132,14 +132,15 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h" />
-  </ItemGroup>
-  <ItemGroup>
-    <ResourceCompile Include="app.rc" />
+    <ClInclude Include="resource1.h" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="app.ico" />
     <Image Include="en.ico" />
     <Image Include="ru.ico" />
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="KbRusSound.rc" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
