@@ -27,11 +27,11 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam){
 		const KBDLLHOOKSTRUCT* p = reinterpret_cast<KBDLLHOOKSTRUCT*>(lParam);
 		if(wParam == WM_KEYDOWN || wParam == WM_SYSKEYDOWN){
 			// Игнор системных модификаторов при желании:
-			if(p->vkCode == VK_ p->vkCode == VK_SHIFT || p->vkCode == VK_CONTROL || p->vkCode == VK_MENU){
+			//if(p->vkCode == VK_SHIFT || p->vkCode == VK_CONTROL || p->vkCode == VK_MENU){
 				if(IsRuLayoutForForegroundThread()){
 					PlayKeySound();
 				}
-			}
+			
 		}
 	}
 	return CallNextHookEx(g_hHook, nCode, wParam, lParam);
