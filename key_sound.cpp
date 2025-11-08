@@ -70,14 +70,14 @@ static void LoadTrayIcons(HINSTANCE hInst){
     // Лучше многоразмерные .ico, система выберет подходящий размер (обычно 16x16) [web:84][web:87]
     g_hIconRu = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(IDI_ICON_RU), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
     g_hIconEn = (HICON)LoadImageW(hInst, MAKEINTRESOURCEW(IDI_ICON_EN), IMAGE_ICON, 0, 0, LR_DEFAULTSIZE);
-} // [web:84][web:87]
+} // -----------------------------------------------------------------------------------------------------
 
 static void TraySetIcon(HICON hIcon){
     if(!hIcon) return;
     g_nid.uFlags = NIF_ICON;
     g_nid.hIcon = hIcon;
     Shell_NotifyIconW(NIM_MODIFY, &g_nid);
-} // [web:74][web:73]
+} // ----------------------------------------------------------------------------------------------------- 
 
 // HKL активного окна
 static HKL GetForegroundHKL(){
@@ -86,13 +86,13 @@ static HKL GetForegroundHKL(){
     DWORD pid = 0;
     DWORD tid = GetWindowThreadProcessId(hwnd, &pid);
     return GetKeyboardLayout(tid);
-} // [web:85]
+} // -----------------------------------------------------------------------------------------------------
 
 static bool IsRuLayout(){
     HKL hkl = GetForegroundHKL();
     LANGID lang = LOWORD((UINT_PTR)hkl);
     return lang == 0x0419;
-} // [web:85]
+} // ----------------------------------------------------------------------------------------------------- 
 
 // Печатаемые символы: ToUnicodeEx > 0
 static bool IsPrintableKey(DWORD vkCode, DWORD scanCode, bool isKeyDown){
@@ -117,28 +117,28 @@ static bool IsPrintableKey(DWORD vkCode, DWORD scanCode, bool isKeyDown){
     WCHAR out[8]{};
     int res = ToUnicodeEx((UINT)vkCode, (UINT)scanCode, keyState, out, 8, 0, GetForegroundHKL());
     return res > 0;
-} // [web:36]
+} // -----------------------------------------------------------------------------------------------------
 
 // ----------------------------- Проигрывание звука -----------------------------
 static void PlayKeySoundRu(){
     if(g_muted_all || g_muted_ru) return;
     PlaySoundW(g_wavPathRu, nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
-} // [web:74]
+} // -----------------------------------------------------------------------------------------------------
 
 static void PlayKeySoundEn(){
     if(g_muted_all || g_muted_en) return;
     PlaySoundW(g_wavPathEn, nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
-} // [web:74]
+} // -----------------------------------------------------------------------------------------------------
 
 static void PlayKeySoundToRu(){
     if(g_muted_all || g_muted_switch_to_ru) return;
     PlaySoundW(g_wavPathToRu, nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
-} // [web:74]
+} // -----------------------------------------------------------------------------------------------------
 
 static void PlayKeySoundToEn(){
     if(g_muted_all || g_muted_switch_to_en) return;
     PlaySoundW(g_wavPathToEn, nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
-} // [web:74]
+} // -----------------------------------------------------------------------------------------------------
 
 // ----------------------------- Хук клавиатуры -----------------------------
 LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam){
@@ -160,7 +160,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam){
         }
     }
     return CallNextHookEx(g_hHook, nCode, wParam, lParam);
-} // [web:85][web:74]
+} // -----------------------------------------------------------------------------------------------------
 
 // ----------------------------- Реестр: загрузка/сохранение -----------------------------
 static void LoadSettings(){
@@ -190,7 +190,7 @@ static void LoadSettings(){
 
         RegCloseKey(hKey);
     }
-} // [web:64]
+} // -----------------------------------------------------------------------------------------------------
 
 static void SaveSettings(){
     HKEY hKey;
@@ -209,7 +209,7 @@ static void SaveSettings(){
 
         RegCloseKey(hKey);
     }
-} // [web:64]
+} // -----------------------------------------------------------------------------------------------------
 
 static void UpdateAutoRun(bool enable){
     wchar_t exePath[MAX_PATH];
@@ -223,7 +223,7 @@ static void UpdateAutoRun(bool enable){
         }
         RegCloseKey(hKey);
     }
-} // [web:64]
+} // -----------------------------------------------------------------------------------------------------
 
 // ----------------------------- Диалог выбора WAV -----------------------------
 static bool SelectWavFile(HWND owner, std::wstring& outPath){
@@ -253,7 +253,7 @@ static bool SelectWavFile(HWND owner, std::wstring& outPath){
     pDlg->Release();
     if(needUninit) CoUninitialize();
     return !outPath.empty();
-} // [web:65]
+} // -----------------------------------------------------------------------------------------------------
 
 // ----------------------------- Меню трея -----------------------------
 static void BuildOrUpdateTrayMenu(){
@@ -281,14 +281,14 @@ static void BuildOrUpdateTrayMenu(){
     AppendMenuW(g_hOptions, MF_STRING, ID_TRAY_SELECT_TO_EN, L"Select file switch en...");
     AppendMenuW(g_hOptions, MF_SEPARATOR, 0, nullptr);
     AppendMenuW(g_hOptions, MF_STRING | (g_autorun ? MF_CHECKED : 0), ID_TRAY_AUTORUN, L"Autostart");
-} // [web:47][web:52]
+} // -----------------------------------------------------------------------------------------------------
 
 static void ShowTrayMenu(HWND hWnd, POINT pt){
     BuildOrUpdateTrayMenu();
     SetForegroundWindow(hWnd);
     TrackPopupMenu(g_hMenu, TPM_RIGHTBUTTON | TPM_LEFTALIGN, pt.x, pt.y, 0, hWnd, nullptr);
     PostMessageW(hWnd, WM_NULL, 0, 0);
-} // [web:47][web:44]
+} // -----------------------------------------------------------------------------------------------------
 
 // ----------------------------- Окно и сообщения -----------------------------
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
@@ -322,7 +322,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
         lstrcpynW(g_nid.szTip, isRu ? L"RU Key Sound" : L"EN Key Sound", ARRAYSIZE(g_nid.szTip));
         Shell_NotifyIconW(NIM_MODIFY, &g_nid);
         return 0;
-    } // [web:85][web:74]
+    } 
     case WM_TRAY: {
         if(LOWORD(lParam) == WM_RBUTTONUP || LOWORD(lParam) == WM_CONTEXTMENU){
             POINT pt{}; GetCursorPos(&pt);
@@ -394,7 +394,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
         return DefWindowProcW(hWnd, msg, wParam, lParam);
     }
     return 0;
-} // [web:52][web:74]
+} // -----------------------------------------------------------------------------------------------------
 
 // ----------------------------- Точка входа -----------------------------
 int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int){
@@ -426,4 +426,4 @@ int WINAPI wWinMain(HINSTANCE hInst, HINSTANCE, PWSTR, int){
 
     UnhookWindowsHookEx(g_hHook);
     return 0;
-} // [web:74][web:85]
+} // -----------------------------------------------------------------------------------------------------
