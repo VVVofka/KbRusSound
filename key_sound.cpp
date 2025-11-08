@@ -20,9 +20,11 @@ static const wchar_t* REG_VAL_WAV_TO_RU = L"WavToRuPath";
 static const wchar_t* REG_VAL_WAV_TO_EN = L"WavToEnPath";
 
 static WCHAR g_wavPathRu[MAX_PATH] = L"C:\\Windows\\Media\\Windows Navigation Start.wav";
-static WCHAR g_wavPathEn[MAX_PATH] = L"C:\\Windows\\Media\\Windows Navigation Start.wav";
+static WCHAR g_wavPathEn[MAX_PATH] = L"C:\\Windows\\Media\\Windows Feed Discovered.wav";
 static WCHAR g_wavPathToRu[MAX_PATH] = L"C:\\Windows\\Media\\Windows Unlock.wav";
 static WCHAR g_wavPathToEn[MAX_PATH] = L"C:\\Windows\\Media\\Windows Battery Low.wav";
+
+static bool	 g_muted_all = false;
 static bool  g_muted_ru = false;
 static bool  g_muted_en = false;
 static bool  g_muted_switch_to_ru = false;
@@ -30,22 +32,27 @@ static bool  g_muted_switch_to_en = false;
 static bool  g_autorun = false;
 
 enum : UINT{
-	ID_TRAY_MUTE_RU = 1001,
-	ID_TRAY_MUTE_EN = 1002,
-	ID_TRAY_MUTE_SWITCH_TO_RU = 1003,
-	ID_TRAY_MUTE_SWITCH_TO_EN = 1004,
-	ID_TRAY_SELECT_RU = 1005,
-	ID_TRAY_SELECT_EN = 1006,
-	ID_TRAY_SELECT_TO_RU = 1007,
-	ID_TRAY_SELECT_TO_EN = 1008,
-	ID_TRAY_AUTORUN = 1009,
-	ID_TRAY_EXIT = 1010
+	ID_TRAY_MUTE_ALL = 1000,   // новый
+	ID_TRAY_OPTIONS = 1001,    // идентификатор пункта-«заголовка», для клика не обязателен
+	ID_TRAY_MUTE_RU = 1002,
+	ID_TRAY_MUTE_EN = 1003,
+	ID_TRAY_MUTE_SWITCH_TO_RU = 1004,
+	ID_TRAY_MUTE_SWITCH_TO_EN = 1005,
+	ID_TRAY_SELECT_RU = 1006,
+	ID_TRAY_SELECT_EN = 1007,
+	ID_TRAY_SELECT_TO_RU = 1008,
+	ID_TRAY_SELECT_TO_EN = 1009,
+	ID_TRAY_AUTORUN = 1010,
+	ID_TRAY_EXIT = 1011
 };
+
 
 // Трей
 static NOTIFYICONDATAW g_nid{};
 static const UINT WM_TRAY = WM_APP + 1;
+
 static HMENU g_hMenu = nullptr;
+static HMENU g_hOptions = nullptr;
 
 // Хук
 static HHOOK g_hHook = nullptr;
@@ -68,6 +75,10 @@ static void LoadSettings(){
 		DWORD autorun = 0; cb = sizeof(autorun);
 		if(RegQueryValueExW(hKey, REG_VAL_AUTORUN, nullptr, &type, reinterpret_cast<LPBYTE>(&autorun), &cb) == ERROR_SUCCESS && type == REG_DWORD){
 			g_autorun = autorun != 0;
+		}
+		DWORD mute_all = 0; cb = sizeof(mute_all);
+		if(RegQueryValueExW(hKey, REG_VAL_AUTORUN, nullptr, &type, reinterpret_cast<LPBYTE>(&mute_all), &cb) == ERROR_SUCCESS && type == REG_DWORD){
+			g_muted_all = mute_all != 0;
 		}
 		DWORD mute_ru = 0; cb = sizeof(mute_ru);
 		if(RegQueryValueExW(hKey, REG_VAL_AUTORUN, nullptr, &type, reinterpret_cast<LPBYTE>(&mute_ru), &cb) == ERROR_SUCCESS && type == REG_DWORD){
@@ -102,6 +113,9 @@ static void SaveSettings(){
 
 		DWORD autorun = g_autorun ? 1u : 0u;
 		RegSetValueExW(hKey, REG_VAL_AUTORUN, 0, REG_DWORD, reinterpret_cast<const BYTE*>(&autorun), sizeof(autorun));
+
+		DWORD muted_all = g_muted_all ? 1u : 0u;
+		RegSetValueExW(hKey, REG_VAL_AUTORUN, 0, REG_DWORD, reinterpret_cast<const BYTE*>(&muted_all), sizeof(muted_all));
 
 		DWORD muted_ru = g_muted_ru ? 1u : 0u;
 		RegSetValueExW(hKey, REG_VAL_AUTORUN, 0, REG_DWORD, reinterpret_cast<const BYTE*>(&muted_ru), sizeof(muted_ru));
@@ -165,20 +179,30 @@ static bool SelectWavFile(HWND owner, std::wstring& outPath){
 } // -----------------------------------------------------------------------------------------------------------
 
 static void BuildOrUpdateTrayMenu(){
-	if(!g_hMenu) g_hMenu = CreatePopupMenu();
-	else{ DestroyMenu(g_hMenu); g_hMenu = CreatePopupMenu(); }
+	if(g_hMenu){ DestroyMenu(g_hMenu); g_hMenu = nullptr; }
+	if(g_hOptions){ DestroyMenu(g_hOptions); g_hOptions = nullptr; }
 
-	AppendMenuW(g_hMenu, MF_STRING | (g_muted_ru ? MF_CHECKED : 0), ID_TRAY_MUTE_RU, L"Mute Ru");
-	AppendMenuW(g_hMenu, MF_STRING | (g_muted_en ? MF_CHECKED : 0), ID_TRAY_MUTE_EN, L"Mute En");
-	AppendMenuW(g_hMenu, MF_STRING | (g_muted_switch_to_ru ? MF_CHECKED : 0), ID_TRAY_MUTE_SWITCH_TO_RU, L"Mute switch to ru");
-	AppendMenuW(g_hMenu, MF_STRING | (g_muted_switch_to_en ? MF_CHECKED : 0), ID_TRAY_MUTE_SWITCH_TO_EN, L"Mute switch to en");
-	AppendMenuW(g_hMenu, MF_STRING, ID_TRAY_SELECT_RU, L"Select file ru...");
-	AppendMenuW(g_hMenu, MF_STRING, ID_TRAY_SELECT_EN, L"Select file en...");
-	AppendMenuW(g_hMenu, MF_STRING, ID_TRAY_SELECT_TO_RU, L"Select file switch ru...");
-	AppendMenuW(g_hMenu, MF_STRING, ID_TRAY_SELECT_TO_EN, L"Select file switch en...");
-	AppendMenuW(g_hMenu, MF_STRING | (g_autorun ? MF_CHECKED : 0), ID_TRAY_AUTORUN, L"Autostart");
+	g_hMenu = CreatePopupMenu();
+	g_hOptions = CreatePopupMenu();
+
+	// Верхний уровень
+	AppendMenuW(g_hMenu, MF_STRING | (g_muted_all ? MF_CHECKED : 0), ID_TRAY_MUTE_ALL, L"Mute all");
+	AppendMenuW(g_hMenu, MF_POPUP, reinterpret_cast<UINT_PTR>(g_hOptions), L"Options");
 	AppendMenuW(g_hMenu, MF_SEPARATOR, 0, nullptr);
 	AppendMenuW(g_hMenu, MF_STRING, ID_TRAY_EXIT, L"Exit");
+
+	// Подменю Options — переносим сюда всё остальное
+	AppendMenuW(g_hOptions, MF_STRING | (g_muted_ru ? MF_CHECKED : 0), ID_TRAY_MUTE_RU, L"Mute Ru");
+	AppendMenuW(g_hOptions, MF_STRING | (g_muted_en ? MF_CHECKED : 0), ID_TRAY_MUTE_EN, L"Mute En");
+	AppendMenuW(g_hOptions, MF_STRING | (g_muted_switch_to_ru ? MF_CHECKED : 0), ID_TRAY_MUTE_SWITCH_TO_RU, L"Mute switch to ru");
+	AppendMenuW(g_hOptions, MF_STRING | (g_muted_switch_to_en ? MF_CHECKED : 0), ID_TRAY_MUTE_SWITCH_TO_EN, L"Mute switch to en");
+	AppendMenuW(g_hOptions, MF_SEPARATOR, 0, nullptr);
+	AppendMenuW(g_hOptions, MF_STRING, ID_TRAY_SELECT_RU, L"Select file ru...");
+	AppendMenuW(g_hOptions, MF_STRING, ID_TRAY_SELECT_EN, L"Select file en...");
+	AppendMenuW(g_hOptions, MF_STRING, ID_TRAY_SELECT_TO_RU, L"Select file switch ru...");
+	AppendMenuW(g_hOptions, MF_STRING, ID_TRAY_SELECT_TO_EN, L"Select file switch en...");
+	AppendMenuW(g_hOptions, MF_SEPARATOR, 0, nullptr);
+	AppendMenuW(g_hOptions, MF_STRING | (g_autorun ? MF_CHECKED : 0), ID_TRAY_AUTORUN, L"Autostart");
 }// -----------------------------------------------------------------------------------------------------------
 
 static void ShowTrayMenu(HWND hWnd, POINT pt){
@@ -246,22 +270,22 @@ static bool IsPrintableKey(DWORD vkCode, DWORD scanCode, bool isKeyDown){
 } // -----------------------------------------------------------------------------------------------------------
 
 static void PlayKeySoundRu(){
-	if(g_muted_ru) return;
+	if(g_muted_all || g_muted_ru) return;
 	PlaySoundW(g_wavPathRu, nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
 } // -----------------------------------------------------------------------------------------------------------
 
 static void PlayKeySoundEn(){
-	if(g_muted_en) return;
+	if(g_muted_all || g_muted_en) return;
 	PlaySoundW(g_wavPathEn, nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
 } // -----------------------------------------------------------------------------------------------------------
 
 static void PlayKeySoundToRu(){
-	if(g_muted_switch_to_ru) return;
+	if(g_muted_all || g_muted_switch_to_ru) return;
 	PlaySoundW(g_wavPathToRu, nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
 } // -----------------------------------------------------------------------------------------------------------
 
 static void PlayKeySoundToEn(){
-	if(g_muted_switch_to_en) return;
+	if(g_muted_all || g_muted_switch_to_en) return;
 	PlaySoundW(g_wavPathToEn, nullptr, SND_FILENAME | SND_ASYNC | SND_NODEFAULT);
 } // -----------------------------------------------------------------------------------------------------------
 
@@ -293,6 +317,7 @@ LRESULT CALLBACK LowLevelKeyboardProc(int nCode, WPARAM wParam, LPARAM lParam){
 
 // Окно-приёмник сообщений
 LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
+	std::wstring sel;
 	switch(msg){
 	case WM_CREATE: {
 		LoadSettings(); // считать wav и флаг автозапуска
@@ -315,13 +340,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
 			ShowTrayMenu(hWnd, pt);
 		} else if(LOWORD(lParam) == WM_LBUTTONDBLCLK){
 			// Быстрый toggle mute по двойному клику
-			g_muted_ru = !g_muted_ru;
+			g_muted_all = !g_muted_all;
 		}
 		break;
 	}
 
 	case WM_COMMAND: {
 		switch(LOWORD(wParam)){
+		case ID_TRAY_MUTE_ALL:
+			g_muted_all = !g_muted_all;
+			// приоритет реализуется в функциях воспроизведения, отдельного вмешательства не нужно
+			// при желании — SaveSettings() и запись REG_VAL_MUTED_ALL (если добавите)
+			SaveSettings();
+			break;
+
 		case ID_TRAY_MUTE_RU:
 			g_muted_ru = !g_muted_ru;
 			SaveSettings();
@@ -342,41 +374,33 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam){
 			SaveSettings();
 			break;
 
-		case ID_TRAY_SELECT_RU: {
-			std::wstring sel;
+		case ID_TRAY_SELECT_RU:
 			if(SelectWavFile(hWnd, sel)){
 				wcsncpy_s(g_wavPathRu, sel.c_str(), _TRUNCATE);
 				SaveSettings();
 			}
 			break;
-		}
 
-		case ID_TRAY_SELECT_EN: {
-			std::wstring sel;
+		case ID_TRAY_SELECT_EN:
 			if(SelectWavFile(hWnd, sel)){
 				wcsncpy_s(g_wavPathEn, sel.c_str(), _TRUNCATE);
 				SaveSettings();
 			}
 			break;
-		}
 
-		case ID_TRAY_SELECT_TO_RU: {
-			std::wstring sel;
+		case ID_TRAY_SELECT_TO_RU:
 			if(SelectWavFile(hWnd, sel)){
 				wcsncpy_s(g_wavPathToRu, sel.c_str(), _TRUNCATE);
 				SaveSettings();
 			}
 			break;
-		}
 
-		case ID_TRAY_SELECT_TO_EN: {
-			std::wstring sel;
+		case ID_TRAY_SELECT_TO_EN:
 			if(SelectWavFile(hWnd, sel)){
 				wcsncpy_s(g_wavPathToEn, sel.c_str(), _TRUNCATE);
 				SaveSettings();
 			}
 			break;
-		}
 
 		case ID_TRAY_AUTORUN:
 			g_autorun = !g_autorun;
