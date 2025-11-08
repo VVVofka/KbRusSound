@@ -29,4 +29,15 @@
       <Filter>Resource Files</Filter>
     </ResourceCompile>
   </ItemGroup>
+  <ItemGroup>
+    <Image Include="en.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="ru.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+    <Image Include="app.ico">
+      <Filter>Resource Files</Filter>
+    </Image>
+  </ItemGroup>
 </Project>
